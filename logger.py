@@ -20,6 +20,7 @@ Created on Thu Jun 20 15:21:30 2017
   2017-12-20 added easy wrapper methods for working with graph/model files
   2018-02-07 added support for multi part logs (default max 1000 lines)
   2018-03-27 added new keras model support
+  2018-06-07 added keras model history analysis
 
 """
 
@@ -105,6 +106,7 @@ class Logger():
        SaveKerasModelWeights() - saves weights for selected layers
        LoadKerasModelWeights() - loads selected layers in given prepared model
        
+       PlotKerasHistory(hist) - smart logs/plots keras model history
        
        
     """
@@ -432,9 +434,11 @@ class Logger():
     saves current figure to a file
     """
     file_prefix = dt.now().strftime("%Y%m%d_%H%M%S")
-    file_name = os.path.join(self._outp_dir,file_prefix+label+".png")
-    self.VerboseLog("Saving figure [...{}]".format(file_name[-40:]))
+    part_file_name = "{}_{}{}".format(file_prefix, label, ".png")
+    file_name = os.path.join(self._outp_dir,part_file_name)
+    self.VerboseLog("Saving pic [..{}]".format(file_name[-50:]))
     plt.savefig(file_name)
+    return file_name
 
   def VerboseLog(self,str_msg, results=False, show_time=False):    
     return self._logger(str_msg, show = True, results = results, show_time = show_time)
@@ -748,7 +752,7 @@ class Logger():
       cb = tf.keras.callbacks.ReduceLROnPlateau(monitor=monitor, patience=patience, factor=factor)
       
     else:
-      assert self.KERAS
+      #assert self.KERAS
       from keras.callbacks import ReduceLROnPlateau
       cb = ReduceLROnPlateau(monitor=monitor, patience=patience, factor=factor)
     return cb
@@ -771,7 +775,7 @@ class Logger():
                                               mode='auto', 
                                               period=period)
     else:
-      assert self.KERAS
+      #assert self.KERAS
       from keras.callbacks import ModelCheckpoint
       file_path = model_name + "_k_E{epoch:02d}_L{" + monitor + ":.6f}" + ".h5"
       self.VerboseLog("Creating keras chekpoint callback...")
@@ -806,7 +810,7 @@ class Logger():
                               write_images=True)
     else:
       from keras.callbacks import TensorBoard
-      assert self.KERAS == True
+      #assert self.KERAS == True
       self.VerboseLog("Creating Keras tensorboard callback...")
       self._tensorboard_dir = os.path.join(self._base_folder,'_tf');
       if not os.path.isdir(self._tensorboard_dir):
@@ -925,6 +929,7 @@ class Logger():
               append = False, format = h5_format)
     self.VerboseLog("Done saving ...{}".format(out_file[-40:]), show_time = True)
     return
+  
   
   def LoadFromHDF(self, h5_file):
     """
@@ -1153,4 +1158,57 @@ class Logger():
   ###
   ### end keras/tf converter
   ###
+  
+  ### 
+  ### KerasHistory 
+  ###
+    
+  def PlotKerasHistory(self, keras_history_object):
+    styles = ['bo','b']
+    keys_lists = [
+        ['acc','val_acc'],
+        ['loss','val_loss'],
+        ['recall_metric','val_recall_metric'],
+        ['precision_metric','val_precision_metric'],
+        ]
+    
+    plots = []
+    
+    hist = keras_history_object.history
+    
+    for keys in keys_lists:
+      vals_dict = {}
+      for k in keys:
+        if k in hist.keys():
+          vals = hist[k]
+          vals_dict[k] = vals
+      plots.append(vals_dict)
+
+    for plot in plots:
+      s_plot = list(plot.keys())
+      plot_name = ""
+      for i in range(len(s_plot)-1):
+        plot_name += "{} vs. ".format(s_plot[i])
+      plot_name += s_plot[-1]
+      self.P("Plotting '{}' for {} epochs...".format(plot_name, 
+                                                   len(plot[s_plot[0]])))
+      plt.figure()
+      max_len = max([len(sss) for sss in s_plot])
+      fmt = " {:<"+str(max_len+1)+"} {}"
+      for i,k in enumerate(plot.keys()):
+        vals = plot[k]
+        s_vals = ""
+        for j in range(min(10, len(vals))):
+          s_vals +="{:.3f}  ".format(vals[j])        
+        self.P(fmt.format(k+':', s_vals))
+        plt.plot(range(len(vals)), vals, styles[i], label=k)
+        plt.legend()
+      plt.title(plot_name)
+      plt.show()
+      self.OutputPyplotImage(label=k)
+        
+    return
+
+  ### end keras history
+  
   
