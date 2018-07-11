@@ -38,16 +38,17 @@ def load_module(module_name, file_name):
 
   return logger_lib
 
-class SimpleLogger:
+class SimpleLogger: 
   def __init__(self):
     return
   def VerboseLog(self, _str, show_time):
     print(_str, flush = True)
 
-def LoadLogger(lib_name, config_file):
+def LoadLogger(lib_name, config_file, load_tf):
   module = load_module("logger", "logger.py")
   if module is not None:
-    logger = module.Logger(lib_name = lib_name, config_file = config_file)
+    logger = module.Logger(lib_name=lib_name, config_file=config_file,
+                           TF_KERAS=load_tf)
   else:
     logger = SimpleLogger()
   return logger

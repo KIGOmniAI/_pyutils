@@ -1,4 +1,4 @@
 {
   "BASE_FOLDER": "GoogleDrive",
-  "APP_FOLDER": "_...../...."
+  "APP_FOLDER": "_zdummy_data"
 }

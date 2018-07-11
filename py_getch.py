@@ -49,45 +49,22 @@ class _GetchWindows:
 getch = _Getch()
 
 
-###############################
-
-import sys,os
-import termios
-import tty
-
-from contextlib import contextmanager
-import signal
-
-
-""" Allow single-key keyboard input (no <enter> needed) 
-     Sample Usage:
-        with interactive.raw_read() as raw:
-          while not exit_flag:
-            keypress = raw.getch()
-            exit_flag = handle_key(keypress)
-"""
-
-
-
-@contextmanager
-def raw_read():
-    """Enable Non-blocking single character read"""
-
-    class RawReadCtrlChar(Exception): pass
-    class  RawReader():
-        def getch(self):
-            termios.tcflush(sys.stdin, termios.TCIOFLUSH)
-            c = sys.stdin.read(1)
-            if c in ("\03", "\04", "\1a"): # break on ctrl-c, d or z
-                raise RawReadCtrlChar(c) 
-            return c
-
-    fd = sys.stdin.fileno()
-    old_settings = termios.tcgetattr(fd)
-    try:
-        tty.setraw(fd)
-        yield RawReader()
-    except RawReadCtrlChar as ex:
-        if str(ex) == "\1a": raise signal.SIGSTP
-    finally:
-        termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+if __name__ == '__main__':
+  
+  import msvcrt
+  def readch(echo=True):
+    "Get a single character on Windows."
+    while msvcrt.kbhit():  # clear out keyboard buffer
+        msvcrt.getwch()
+    ch = msvcrt.getwch()
+    if ch in u'\x00\xe0':  # arrow or function key prefix?
+        ch = msvcrt.getwch()  # second call returns the actual key code
+    if echo:
+        msvcrt.putwch(ch)
+    return ch  
+  
+  while True:
+    #if msvcrt.kbhit():
+    #  ch = msvcrt.getwch()
+      ch = readch()    
+      print(ch)

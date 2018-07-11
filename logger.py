@@ -21,6 +21,7 @@ Created on Thu Jun 20 15:21:30 2017
   2018-02-07 added support for multi part logs (default max 1000 lines)
   2018-03-27 added new keras model support
   2018-06-07 added keras model history analysis
+  2018-07-04 added GetKerasModelSummary
 
 """
 
@@ -31,7 +32,7 @@ import os
 import socket
 import pickle
 
-from scipy.misc import imsave
+from imageio import save as imsave
 
 from io import TextIOWrapper, BytesIO
 import numpy as np
@@ -93,8 +94,10 @@ class Logger():
        LoadKerasModel() - loads from models repo folder
        SaveKerasModel() - save to models repo folder
        
+       SaveTFGraph() - uses a saver to save a graph in models repo
+       
        LoadGraphFromModels(model) - loads a graph named "model" from model repository
-       SaveGraphToModels() - similar to SaveTFGRaph but saves in model repository
+       SaveGraphToModels() - similar to SaveGraph but saves in model repository
        
        GetKerasEpochCallback() - logger support for keras training
        GetKerasCheckpointCallback() - logger support for keras checkpoint saving
@@ -132,7 +135,7 @@ class Logger():
     self.__lib__= lib_name
     self._base_folder  = base_folder
     self.config_data = None
-    
+
     self._configure_data_and_dirs(config_file)
     self._generate_log_path()
     self.log_results_file = os.path.join(self._logs_dir, self.log_results_file)
@@ -140,7 +143,7 @@ class Logger():
     ver = "v.{}".format(lib_ver) if lib_ver != "" else ""
     self.VerboseLog("Library [{} {}] initialized on machine [{}]".format(
                     self.__lib__, ver, self.MACHINE_NAME))
-    self.VerboseLog("Logger ver: {}".format(self.__version__))
+    self.VerboseLog("Logger version: {}".format(self.__version__))
     if self.TF_KERAS:
       self.CheckTF()
     return
@@ -472,6 +475,24 @@ class Logger():
 
     str_result = "Keras Neural Network Layout\n"+out
     return str_result
+
+
+  def GetDataFrameInfo(self, df):
+    # setup the environment
+    old_stdout = sys.stdout
+    sys.stdout = TextIOWrapper(BytesIO(), sys.stdout.encoding)
+    # write to stdout or stdout.buffer
+    df.info()
+    # get output
+    sys.stdout.seek(0)      # jump to the start
+    out = sys.stdout.read() # read output
+    # restore stdout
+    sys.stdout.close()
+    sys.stdout = old_stdout
+
+    str_result = "DataFrame info:\n"+out
+    return str_result
+
 
   def GetKerasModelDesc(self, model):
     """
@@ -944,6 +965,25 @@ class Logger():
     df = pd.read_hdf(out_file, key = 'table_' + table_name)
     self.VerboseLog("Done loading ...{}".format(out_file[-40:]), show_time = True)
     return df
+  
+  
+  def SaveTFGraph(self, tf_saver, tf_session, file_name, sub_folder='', debug=False):
+    if file_name[-5] != '.ckpt':
+      file_name += '.ckpt'
+    mfolder = self.GetModelsFolder()
+    folder = os.path.join(mfolder,sub_folder)
+    if not os.path.isdir(folder):
+      self.P("Creating folder [{}]".format(folder))
+      os.makedirs(folder)                          
+    path = os.path.join(folder, file_name)
+    try:
+      if debug:
+        self.P("Saving tf checkpoint '{}'".format(file_name))
+      tf_saver.save(tf_session, path)
+    except:
+      self.P("ERROR Saving session for {}".format(path[-40:]))
+    return
+
     
   
   ###
@@ -1048,13 +1088,13 @@ class Logger():
     
     
     
-  
+
   def save_graph_to_file(self, sess, graph, graph_file_name, output_tensor_list):
     from tensorflow.python.framework import graph_util
     from tensorflow.python.platform import gfile
     output_graph_def = graph_util.convert_variables_to_constants(
         sess, graph.as_graph_def(), output_tensor_list)
-  
+
     with gfile.FastGFile(graph_file_name, 'wb') as f:
       f.write(output_graph_def.SerializeToString())
     return 
@@ -1168,13 +1208,18 @@ class Logger():
     keys_lists = [
         ['acc','val_acc'],
         ['loss','val_loss'],
+        ['recall','val_recall'],
         ['recall_metric','val_recall_metric'],
         ['precision_metric','val_precision_metric'],
+        ['precision','val_precision'],
         ]
     
     plots = []
     
-    hist = keras_history_object.history
+    if type(keras_history_object) is dict:
+      hist = keras_history_object
+    else:
+      hist = keras_history_object.history
     
     for keys in keys_lists:
       vals_dict = {}
@@ -1182,7 +1227,8 @@ class Logger():
         if k in hist.keys():
           vals = hist[k]
           vals_dict[k] = vals
-      plots.append(vals_dict)
+      if vals_dict != {}:    
+        plots.append(vals_dict)
 
     for plot in plots:
       s_plot = list(plot.keys())
